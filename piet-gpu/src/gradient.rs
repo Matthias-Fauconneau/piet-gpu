@@ -38,7 +38,7 @@ pub struct Colrv1RadialGradient {
 
 #[derive(Clone)]
 pub struct BakedGradient {
-    ramp: Vec<u32>,
+    //#[cfg(feature = "swash")] ramp: Vec<u32>,
 }
 
 #[derive(Clone)]

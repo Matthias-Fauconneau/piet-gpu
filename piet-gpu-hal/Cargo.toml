@@ -7,9 +7,11 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-ash = "0.33"
-ash-window = "0.7"
-raw-window-handle = "0.3"
+#ash = { version = "0.36", default-features = false, features = ["linked"] }
+ash = { git = "https://github.com/Matthias-Fauconneau/ash", default-features = false, features = ["linked"] }
+#ash-window = "0.9"
+ash-window = { git = "https://github.com/Matthias-Fauconneau/ash" }
+raw-window-handle = "0.4"
 bitflags = "1.2.1"
 smallvec = "1.6.1"
 bytemuck = "1.7.2"
@@ -29,3 +31,4 @@ objc = "0.2.5"
 block = "0.1.6"
 cocoa-foundation = "0.1"
 foreign-types = "0.3.2"
+

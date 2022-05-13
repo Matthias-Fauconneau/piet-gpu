@@ -12,9 +12,9 @@ pub struct RampCache {
 }
 
 impl RampCache {
-    pub fn new() -> Self {
+    /*pub fn new() -> Self {
         Self::default()
-    }
+    }*/
 
     pub fn advance(&mut self) {
         self.epoch += 1;

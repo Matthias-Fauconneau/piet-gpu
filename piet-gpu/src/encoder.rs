@@ -488,11 +488,11 @@ fn padding(x: usize, align: usize) -> usize {
 }
 
 impl GlyphEncoder {
-    pub(crate) fn path_encoder(&mut self) -> PathEncoder {
+    pub fn path_encoder(&mut self) -> PathEncoder {
         PathEncoder::new(&mut self.tag_stream, &mut self.pathseg_stream)
     }
 
-    pub(crate) fn finish_path(&mut self, n_pathseg: u32) {
+    pub fn finish_path(&mut self, n_pathseg: u32) {
         self.n_path += 1;
         self.n_pathseg += n_pathseg;
     }

@@ -21,7 +21,7 @@ use winapi::um::d3d12::{
     D3D12_GPU_DESCRIPTOR_HANDLE,
 };
 
-use crate::{bestfit::BestFit, Error};
+use crate::Error;
 
 use super::wrappers::{DescriptorHeap, Device};
 
@@ -34,6 +34,8 @@ pub struct DescriptorPool {
     gpu_visible: Vec<GpuHeap>,
     free_list: Arc<Mutex<DescriptorFreeList>>,
 }
+
+#[path="bestfit.rs"] mod bestfit;
 
 #[derive(Default)]
 pub struct DescriptorFreeList {

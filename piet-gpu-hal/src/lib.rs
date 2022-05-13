@@ -6,7 +6,6 @@
 use bitflags::bitflags;
 
 mod backend;
-mod bestfit;
 mod bufwrite;
 mod hub;
 

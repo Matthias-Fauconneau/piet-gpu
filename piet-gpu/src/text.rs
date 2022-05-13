@@ -48,7 +48,7 @@ pub struct PietGpuTextLayoutBuilder {
 struct Glyph {
     glyph_id: GlyphId,
     x: f32,
-    y: f32,
+    //y: f32,
 }
 
 struct TextRenderCtx<'a> {
@@ -147,10 +147,10 @@ impl PietGpuTextLayout {
     pub(crate) fn make_layout(font: &Font, text: &str, size: f64) -> PietGpuTextLayout {
         let mut glyphs = Vec::new();
         let mut x = 0.0;
-        let y = 0.0;
+        //let y = 0.0;
         for c in text.chars() {
             let glyph_id = font.font_ref.charmap().map(c);
-            let glyph = Glyph { glyph_id, x, y };
+            let glyph = Glyph { glyph_id, x /*, y*/ };
             glyphs.push(glyph);
             let adv = font.font_ref.glyph_metrics(&[]).advance_width(glyph_id);
             x += adv;

@@ -37,7 +37,7 @@ impl ResourceContext {
         PersistentBrush { kind: 0, id: 0 }
     }
 
-    pub fn destroy_brush(&mut self, brush: PersistentBrush) {}
+    pub fn destroy_brush(&mut self, _brush: PersistentBrush) {}
 
     pub fn ramp_data(&self) -> &[u32] {
         &self.ramps.data()
@@ -52,5 +52,5 @@ pub struct PersistentBrush {
 }
 
 struct PersistentBrushData {
-    brush: Brush,
+    _brush: Brush,
 }

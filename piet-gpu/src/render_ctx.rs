@@ -3,7 +3,7 @@ const DO_SRGB_CONVERSION: bool = false;
 
 use std::borrow::Cow;
 
-use crate::encoder::GlyphEncoder;
+#[cfg(feature = "swash")] use crate::encoder::GlyphEncoder;
 use crate::stages::{Config, Transform};
 use piet::kurbo::{Affine, PathEl, Point, Rect, Shape};
 use piet::{
@@ -16,8 +16,9 @@ use piet_gpu_types::encoder::{Encode, Encoder};
 use piet_gpu_types::scene::Element;
 
 use crate::gradient::{Colrv1RadialGradient, LinearGradient, RadialGradient, RampCache};
-use crate::text::Font;
-pub use crate::text::{PietGpuText, PietGpuTextLayout, PietGpuTextLayoutBuilder};
+#[cfg(feature = "swash")] use crate::text::Font;
+#[cfg(feature = "swash")] pub use crate::text::{PietGpuText, PietGpuTextLayout, PietGpuTextLayoutBuilder};
+
 use crate::Blend;
 
 pub struct PietGpuImage;
@@ -26,7 +27,7 @@ pub struct PietGpuRenderContext {
     encoder: Encoder,
     elements: Vec<Element>,
     // Will probably need direct accesss to hal Device to create images etc.
-    inner_text: PietGpuText,
+    #[cfg(feature = "swash")] inner_text: PietGpuText,
     stroke_width: f32,
     // We're tallying these cpu-side for expedience, but will probably
     // move this to some kind of readback from element processing.
@@ -76,13 +77,14 @@ impl PietGpuRenderContext {
     pub fn new() -> PietGpuRenderContext {
         let encoder = Encoder::new();
         let elements = Vec::new();
-        let font = Font::new();
-        let inner_text = PietGpuText::new(font);
+        #[cfg(feature = "swash")] let font = Font::new();
+        #[cfg(feature = "swash")] let inner_text = PietGpuText::new(font);
+
         let stroke_width = -1.0;
         PietGpuRenderContext {
             encoder,
             elements,
-            inner_text,
+            #[cfg(feature = "swash")] inner_text,
             stroke_width,
             path_count: 0,
             pathseg_count: 0,
@@ -158,6 +160,37 @@ impl PietGpuRenderContext {
     }
 }
 
+cfg_if::cfg_if!{ if #[cfg(not(feature="swash"))] {
+#[derive(Clone)] pub struct PietGpuTextLayout;
+pub struct PietGpuTextLayoutBuilder;
+impl piet::TextLayoutBuilder for PietGpuTextLayoutBuilder {
+    type Out = PietGpuTextLayout;
+    fn max_width(self, _width: f64) -> Self { self }
+    fn alignment(self, _alignment: piet::TextAlignment) -> Self { self }
+    fn default_attribute(self, _: impl Into<piet::TextAttribute>) -> Self { self }
+    fn range_attribute(self, _: impl std::ops::RangeBounds<usize>, _: impl Into<piet::TextAttribute>) -> Self { self }
+    fn build(self) -> Result<Self::Out, Error> { unimplemented!() }
+}
+#[derive(Clone)] pub struct PietGpuText;
+impl piet::Text for PietGpuText {
+    type TextLayout = PietGpuTextLayout;
+    type TextLayoutBuilder = PietGpuTextLayoutBuilder;
+    fn load_font(&mut self, _data: &[u8]) -> Result<piet::FontFamily, Error> { Ok(piet::FontFamily::default()) }
+    fn new_text_layout(&mut self, _: impl piet::TextStorage) -> Self::TextLayoutBuilder { unimplemented!() }
+    fn font_family(&mut self, _family_name: &str) -> Option<piet::FontFamily> { Some(piet::FontFamily::default()) }
+}
+impl piet::TextLayout for PietGpuTextLayout {
+    fn size(&self) -> piet::kurbo::Size { piet::kurbo::Size::ZERO }
+    fn image_bounds(&self) -> piet::kurbo::Rect { Rect::ZERO }
+    fn line_text(&self, _line_number: usize) -> Option<&str> { None }
+    fn line_metric(&self, _line_number: usize) -> Option<piet::LineMetric> { None }
+    fn line_count(&self) -> usize { 0 }
+    fn hit_test_point(&self, _point: Point) -> piet::HitTestPoint { piet::HitTestPoint::default() }
+    fn hit_test_text_position(&self, _text_position: usize) -> piet::HitTestPosition { piet::HitTestPosition::default() }
+    fn text(&self) -> &str { "" }
+}
+}}
+
 impl RenderContext for PietGpuRenderContext {
     type Brush = PietGpuBrush;
     type Image = PietGpuImage;
@@ -194,7 +227,6 @@ impl RenderContext for PietGpuRenderContext {
                 let rad = self.ramp_cache.add_radial_gradient(&rad);
                 Ok(PietGpuBrush::RadGradient(rad))
             }
-            _ => todo!("don't do radial gradients yet"),
         }
     }
 
@@ -239,12 +271,18 @@ impl RenderContext for PietGpuRenderContext {
     }
 
     fn text(&mut self) -> &mut Self::Text {
-        &mut self.inner_text
+        cfg_if::cfg_if! { if #[cfg(feature = "swash")] { &mut self.inner_text } else { unimplemented!() } }
     }
 
     fn draw_text(&mut self, layout: &Self::TextLayout, pos: impl Into<Point>) {
-        self.encode_linewidth(-1.0);
-        layout.draw_text(self, pos.into());
+        cfg_if::cfg_if! {
+                if #[cfg(feature = "swash")] {
+                self.encode_linewidth(-1.0);
+                layout.draw_text(self, pos.into());
+            } else {
+                 let _ = (layout, pos); unimplemented!();
+                }
+            }
     }
 
     fn save(&mut self) -> Result<(), Error> {
@@ -407,11 +445,11 @@ impl PietGpuRenderContext {
         self.new_encoder.end_clip(tos.blend);
     }
 
-    pub(crate) fn encode_glyph(&mut self, glyph: &GlyphEncoder) {
+    #[cfg(feature = "swash")] pub fn encode_glyph(&mut self, glyph: &GlyphEncoder) {
         self.new_encoder.encode_glyph(glyph);
     }
 
-    pub(crate) fn fill_glyph(&mut self, rgba_color: u32) {
+    pub fn fill_glyph(&mut self, rgba_color: u32) {
         self.new_encoder.fill_color(rgba_color);
     }
 
@@ -426,7 +464,7 @@ impl PietGpuRenderContext {
         }
     }
 
-    fn encode_brush(&mut self, brush: &PietGpuBrush) {
+    pub fn encode_brush(&mut self, brush: &PietGpuBrush) {
         match brush {
             PietGpuBrush::Solid(rgba_color) => {
                 self.new_encoder.fill_color(*rgba_color);
@@ -455,15 +493,6 @@ impl IntoBrush<PietGpuRenderContext> for PietGpuBrush {
 
 pub(crate) fn to_f32_2(point: Point) -> [f32; 2] {
     [point.x as f32, point.y as f32]
-}
-
-fn rect_to_f32_4(rect: Rect) -> [f32; 4] {
-    [
-        rect.x0 as f32,
-        rect.y0 as f32,
-        rect.x1 as f32,
-        rect.y1 as f32,
-    ]
 }
 
 fn to_srgb(f: f64) -> f64 {

@@ -10,3 +10,7 @@ members = [
     "piet-scene",
     "tests",
 ]
+
+#[patch.crates-io]
+#ash-window={git='https://github.com/Matthias-Fauconneau/ash'}
+#ash={git='https://github.com/Matthias-Fauconneau/ash'}

@@ -1,12 +1,11 @@
 mod blend;
-mod encoder;
-pub mod glyph_render;
+pub mod encoder;
 mod gradient;
-mod pico_svg;
+#[cfg(feature = "roxmltree")] mod pico_svg;
 mod render_ctx;
 pub mod stages;
-pub mod test_scenes;
-mod text;
+#[cfg(feature = "roxmltree")] pub mod test_scenes;
+#[cfg(feature = "swash")] mod text;
 
 use bytemuck::Pod;
 use std::convert::TryInto;
@@ -16,18 +15,18 @@ pub use encoder::EncodedSceneRef;
 pub use gradient::Colrv1RadialGradient;
 pub use render_ctx::PietGpuRenderContext;
 
-use piet::kurbo::Vec2;
-use piet::{ImageFormat, RenderContext};
+//#[cfg(feature = "swash")] use piet::kurbo::Vec2;
+use piet::ImageFormat;
+//#[cfg(feature = "swash")]  use piet::RenderContext;
 
 use piet_gpu_hal::{
     include_shader, BindType, Buffer, BufferUsage, CmdBuf, ComputePassDescriptor, DescriptorSet,
     Error, Image, ImageLayout, Pipeline, QueryPool, Session,
 };
 
-pub use pico_svg::PicoSvg;
-use stages::{ClipBinding, ElementBinding, ElementCode};
+use stages::{ClipBinding, ElementBinding, ElementCode, ClipCode, Config, ElementStage};
 
-use crate::stages::{ClipCode, Config, ElementStage};
+#[cfg(feature = "roxmltree")] pub use pico_svg::PicoSvg;
 
 const TILE_W: usize = 16;
 const TILE_H: usize = 16;

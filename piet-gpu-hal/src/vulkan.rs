@@ -121,8 +121,8 @@ struct Layers {
 }
 
 unsafe extern "system" fn vulkan_debug_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    _message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
@@ -142,8 +142,8 @@ unsafe extern "system" fn vulkan_debug_callback(
     };
 
     println!(
-        "{:?}:\n{:?} [{} ({})] : {}\n",
-        message_severity, message_type, message_id_name, message_id_number, message,
+        "[{} ({})] : {}\n",
+        message_id_name, message_id_number, message,
     );
 
     vk::FALSE
@@ -162,7 +162,7 @@ impl VkInstance {
     ) -> Result<(VkInstance, Option<VkSurface>), Error> {
         unsafe {
             let app_name = CString::new("VkToy").unwrap();
-            let entry = Entry::new()?;
+            let entry = Entry::linked();
 
             let mut layers = Layers::new(entry.enumerate_instance_layer_properties()?);
             if cfg!(debug_assertions) {
@@ -170,14 +170,14 @@ impl VkInstance {
                     .try_add(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
             }
 
-            let mut exts = Extensions::new(entry.enumerate_instance_extension_properties()?);
+            let mut exts = Extensions::new(entry.enumerate_instance_extension_properties(None)?);
             let mut has_debug_ext = false;
             if cfg!(debug_assertions) {
                 has_debug_ext = exts.try_add(DebugUtils::name());
             }
             if let Some(ref handle) = window_handle {
-                for ext in ash_window::enumerate_required_extensions(*handle)? {
-                    exts.try_add(ext);
+                for &ext in ash_window::enumerate_required_extensions(*handle)? {
+                    exts.try_add(CStr::from_ptr(ext));
                 }
             }
 
@@ -192,9 +192,9 @@ impl VkInstance {
             };
 
             let instance = entry.create_instance(
-                &vk::InstanceCreateInfo::builder()
+                &vk::InstanceCreateInfo::default()
                     .application_info(
-                        &vk::ApplicationInfo::builder()
+                        &vk::ApplicationInfo::default()
                             .application_name(&app_name)
                             .application_version(0)
                             .engine_name(&app_name)
@@ -206,12 +206,12 @@ impl VkInstance {
             )?;
 
             let (dbg_loader, _dbg_callbk) = if has_debug_ext {
-                let dbg_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                let dbg_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
                     .message_severity(
                         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
                             | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
                     )
-                    .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                    .message_type(vk::DebugUtilsMessageTypeFlagsEXT::GENERAL | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE)
                     .pfn_user_callback(Some(vulkan_debug_callback));
                 let dbg_loader = DebugUtils::new(&entry, &instance);
                 let dbg_callbk = dbg_loader
@@ -256,11 +256,11 @@ impl VkInstance {
 
         let mut has_descriptor_indexing = false;
         let vk1_1 = self.vk_version >= vk::make_api_version(0, 1, 1, 0);
-        let mut features2 = vk::PhysicalDeviceFeatures2::builder();
-        let mut set_features2 = vk::PhysicalDeviceFeatures2::builder();
+        let mut features2 = vk::PhysicalDeviceFeatures2::default();
+        let mut set_features2 = vk::PhysicalDeviceFeatures2::default();
         if vk1_1 {
             let mut descriptor_indexing_features =
-                vk::PhysicalDeviceDescriptorIndexingFeatures::builder();
+                vk::PhysicalDeviceDescriptorIndexingFeatures::default();
             features2 = features2.push_next(&mut descriptor_indexing_features);
             self.instance
                 .get_physical_device_features2(pdevice, &mut features2);
@@ -274,12 +274,12 @@ impl VkInstance {
         }
 
         let queue_priorities = [1.0];
-        let queue_create_infos = [vk::DeviceQueueCreateInfo::builder()
+        let queue_create_infos = [vk::DeviceQueueCreateInfo::default()
             .queue_family_index(qfi)
             .queue_priorities(&queue_priorities)
-            .build()];
+            ];
 
-        let mut descriptor_indexing = vk::PhysicalDeviceDescriptorIndexingFeatures::builder()
+        let mut descriptor_indexing = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
             .shader_storage_image_array_non_uniform_indexing(true)
             .descriptor_binding_variable_descriptor_count(true)
             .runtime_descriptor_array(true);
@@ -297,10 +297,10 @@ impl VkInstance {
         }
         let has_subgroup_size = vk1_1 && extensions.try_add(vk::ExtSubgroupSizeControlFn::name());
         let has_memory_model = vk1_1 && extensions.try_add(vk::KhrVulkanMemoryModelFn::name());
-        let mut create_info = vk::DeviceCreateInfo::builder()
+        let mut create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(extensions.as_ptrs());
-        let mut set_memory_model_features = vk::PhysicalDeviceVulkanMemoryModelFeatures::builder();
+        let mut set_memory_model_features = vk::PhysicalDeviceVulkanMemoryModelFeatures::default();
         if vk1_1 {
             create_info = create_info.push_next(&mut set_features2);
             if has_memory_model {
@@ -330,7 +330,7 @@ impl VkInstance {
         let subgroup_size = if has_subgroup_size {
             let mut subgroup_props = vk::PhysicalDeviceSubgroupSizeControlPropertiesEXT::default();
             let mut properties =
-                vk::PhysicalDeviceProperties2::builder().push_next(&mut subgroup_props);
+                vk::PhysicalDeviceProperties2::default().push_next(&mut subgroup_props);
             self.instance
                 .get_physical_device_properties2(pdevice, &mut properties);
             Some(SubgroupSize {
@@ -432,7 +432,7 @@ impl VkInstance {
             extent.height = height as u32;
         }
 
-        let create_info = vk::SwapchainCreateInfoKHR::builder()
+        let create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.surface)
             .min_image_count(image_count)
             .image_format(surface_format.format)
@@ -499,7 +499,7 @@ impl crate::backend::Device for VkDevice {
                 vk_usage |= vk::BufferUsageFlags::TRANSFER_DST;
             }
             let buffer = device.create_buffer(
-                &vk::BufferCreateInfo::builder()
+                &vk::BufferCreateInfo::default()
                     .size(size)
                     .usage(
                         vk::BufferUsageFlags::STORAGE_BUFFER
@@ -518,7 +518,7 @@ impl crate::backend::Device for VkDevice {
             )
             .unwrap(); // TODO: proper error
             let buffer_memory = device.allocate_memory(
-                &vk::MemoryAllocateInfo::builder()
+                &vk::MemoryAllocateInfo::default()
                     .allocation_size(mem_requirements.size)
                     .memory_type_index(mem_type),
                 None,
@@ -561,7 +561,7 @@ impl crate::backend::Device for VkDevice {
             ImageFormat::Rgba8 => vk::Format::R8G8B8A8_UNORM,
         };
         let image = device.create_image(
-            &vk::ImageCreateInfo::builder()
+            &vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk_format)
                 .extent(extent)
@@ -583,14 +583,14 @@ impl crate::backend::Device for VkDevice {
         )
         .unwrap(); // TODO: proper error
         let image_memory = device.allocate_memory(
-            &vk::MemoryAllocateInfo::builder()
+            &vk::MemoryAllocateInfo::default()
                 .allocation_size(mem_requirements.size)
                 .memory_type_index(mem_type),
             None,
         )?;
         device.bind_image_memory(image, image_memory, 0)?;
         let image_view = device.create_image_view(
-            &vk::ImageViewCreateInfo::builder()
+            &vk::ImageViewCreateInfo::default()
                 .view_type(vk::ImageViewType::TYPE_2D)
                 .image(image)
                 .format(vk::Format::R8G8B8A8_UNORM)
@@ -607,7 +607,7 @@ impl crate::backend::Device for VkDevice {
                     b: vk::ComponentSwizzle::IDENTITY,
                     a: vk::ComponentSwizzle::IDENTITY,
                 })
-                .build(),
+                ,
             None,
         )?;
         Ok(Image {
@@ -632,7 +632,7 @@ impl crate::backend::Device for VkDevice {
         if signaled {
             flags |= vk::FenceCreateFlags::SIGNALED;
         }
-        Ok(device.create_fence(&vk::FenceCreateInfo::builder().flags(flags).build(), None)?)
+        Ok(device.create_fence(&vk::FenceCreateInfo::default().flags(flags), None)?)
     }
 
     unsafe fn destroy_fence(&self, fence: Self::Fence) -> Result<(), Error> {
@@ -673,16 +673,16 @@ impl crate::backend::Device for VkDevice {
                     BindType::Buffer | BindType::BufReadOnly => vk::DescriptorType::STORAGE_BUFFER,
                     BindType::Image | BindType::ImageRead => vk::DescriptorType::STORAGE_IMAGE,
                 };
-                vk::DescriptorSetLayoutBinding::builder()
+                vk::DescriptorSetLayoutBinding::default()
                     .binding(i.try_into().unwrap())
                     .descriptor_type(descriptor_type)
                     .descriptor_count(1)
                     .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                    .build()
+
             })
             .collect::<Vec<_>>();
         let descriptor_set_layout = device.create_descriptor_set_layout(
-            &vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings),
+            &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
             None,
         )?;
         let descriptor_set_layouts = [descriptor_set_layout];
@@ -690,26 +690,26 @@ impl crate::backend::Device for VkDevice {
         // Create compute pipeline.
         let code_u32 = convert_u32_vec(code);
         let compute_shader_module = device
-            .create_shader_module(&vk::ShaderModuleCreateInfo::builder().code(&code_u32), None)?;
+            .create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code_u32), None)?;
         let entry_name = CString::new("main").unwrap();
         let pipeline_layout = device.create_pipeline_layout(
-            &vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_set_layouts),
+            &vk::PipelineLayoutCreateInfo::default().set_layouts(&descriptor_set_layouts),
             None,
         )?;
 
         let pipeline = device
             .create_compute_pipelines(
                 vk::PipelineCache::null(),
-                &[vk::ComputePipelineCreateInfo::builder()
+                &[vk::ComputePipelineCreateInfo::default()
                     .stage(
-                        vk::PipelineShaderStageCreateInfo::builder()
+                        vk::PipelineShaderStageCreateInfo::default()
                             .stage(vk::ShaderStageFlags::COMPUTE)
                             .module(compute_shader_module)
                             .name(&entry_name)
-                            .build(),
+                            ,
                     )
                     .layout(pipeline_layout)
-                    .build()],
+                    ],
                 None,
             )
             .map_err(|(_pipeline, err)| err)?[0];
@@ -736,16 +736,16 @@ impl crate::backend::Device for VkDevice {
     ) {
         let device = &self.device.device;
         device.update_descriptor_sets(
-            &[vk::WriteDescriptorSet::builder()
+            &[vk::WriteDescriptorSet::default()
                 .dst_set(ds.descriptor_set)
                 .dst_binding(index)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&[vk::DescriptorBufferInfo::builder()
+                .buffer_info(&[vk::DescriptorBufferInfo::default()
                     .buffer(buf.buffer)
                     .offset(0)
                     .range(vk::WHOLE_SIZE)
-                    .build()])
-                .build()],
+                    ])
+                ],
             &[],
         );
     }
@@ -758,15 +758,15 @@ impl crate::backend::Device for VkDevice {
     ) {
         let device = &self.device.device;
         device.update_descriptor_sets(
-            &[vk::WriteDescriptorSet::builder()
+            &[vk::WriteDescriptorSet::default()
                 .dst_set(ds.descriptor_set)
                 .dst_binding(index)
                 .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                .image_info(&[vk::DescriptorImageInfo::builder()
+                .image_info(&[vk::DescriptorImageInfo::default()
                     .image_view(image.image_view)
                     .image_layout(vk::ImageLayout::GENERAL)
-                    .build()])
-                .build()],
+                    ])
+                ],
             &[],
         );
     }
@@ -775,13 +775,13 @@ impl crate::backend::Device for VkDevice {
         unsafe {
             let device = &self.device.device;
             let cmd_pool = device.create_command_pool(
-                &vk::CommandPoolCreateInfo::builder()
+                &vk::CommandPoolCreateInfo::default()
                     .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                     .queue_family_index(self.qfi),
                 None,
             )?;
             let cmd_buf = device.allocate_command_buffers(
-                &vk::CommandBufferAllocateInfo::builder()
+                &vk::CommandBufferAllocateInfo::default()
                     .command_pool(cmd_pool)
                     .level(vk::CommandBufferLevel::PRIMARY)
                     .command_buffer_count(1),
@@ -806,7 +806,7 @@ impl crate::backend::Device for VkDevice {
         unsafe {
             let device = &self.device.device;
             let pool = device.create_query_pool(
-                &vk::QueryPoolCreateInfo::builder()
+                &vk::QueryPoolCreateInfo::default()
                     .query_type(vk::QueryType::TIMESTAMP)
                     .query_count(n_queries),
                 None,
@@ -865,12 +865,12 @@ impl crate::backend::Device for VkDevice {
             .collect::<SmallVec<[_; 2]>>();
         device.queue_submit(
             self.queue,
-            &[vk::SubmitInfo::builder()
+            &[vk::SubmitInfo::default()
                 .command_buffers(&cmd_bufs)
                 .wait_semaphores(&wait_semaphores)
                 .wait_dst_stage_mask(&wait_stages)
                 .signal_semaphores(&signal_semaphores)
-                .build()],
+                ],
             fence,
         )?;
         Ok(())
@@ -911,7 +911,7 @@ impl crate::backend::Device for VkDevice {
             SamplerParams::Nearest => vk::Filter::NEAREST,
         };
         let sampler = device.create_sampler(
-            &vk::SamplerCreateInfo::builder()
+            &vk::SamplerCreateInfo::default()
                 .mag_filter(filter)
                 .min_filter(filter)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
@@ -937,7 +937,7 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
             .device
             .begin_command_buffer(
                 self.cmd_buf,
-                &vk::CommandBufferBeginInfo::builder()
+                &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )
             .unwrap();
@@ -1004,10 +1004,10 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
             vk::PipelineStageFlags::ALL_COMMANDS,
             vk::PipelineStageFlags::ALL_COMMANDS,
             vk::DependencyFlags::empty(),
-            &[vk::MemoryBarrier::builder()
+            &[vk::MemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::MEMORY_WRITE)
                 .dst_access_mask(vk::AccessFlags::MEMORY_READ)
-                .build()],
+                ],
             &[],
             &[],
         );
@@ -1020,10 +1020,10 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
             vk::PipelineStageFlags::ALL_COMMANDS,
             vk::PipelineStageFlags::HOST,
             vk::DependencyFlags::empty(),
-            &[vk::MemoryBarrier::builder()
+            &[vk::MemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::MEMORY_WRITE)
                 .dst_access_mask(vk::AccessFlags::HOST_READ)
-                .build()],
+                ],
             &[],
             &[],
         );
@@ -1043,7 +1043,7 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
             vk::DependencyFlags::empty(),
             &[],
             &[],
-            &[vk::ImageMemoryBarrier::builder()
+            &[vk::ImageMemoryBarrier::default()
                 .image(image.image)
                 .src_access_mask(vk::AccessFlags::MEMORY_WRITE)
                 .dst_access_mask(vk::AccessFlags::MEMORY_READ)
@@ -1056,7 +1056,7 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
                     base_array_layer: 0,
                     layer_count: vk::REMAINING_MIP_LEVELS,
                 })
-                .build()],
+                ],
         );
     }
 
@@ -1073,7 +1073,7 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
             self.cmd_buf,
             src.buffer,
             dst.buffer,
-            &[vk::BufferCopy::builder().size(size).build()],
+            &[vk::BufferCopy::default().size(size)],
         );
     }
 
@@ -1177,9 +1177,9 @@ impl crate::backend::CmdBuf<VkDevice> for CmdBuf {
     unsafe fn begin_debug_label(&mut self, label: &str) {
         if let Some(utils) = &self.device.dbg_loader {
             let label_cstr = CString::new(label).unwrap();
-            let label_ext = DebugUtilsLabelEXT::builder()
+            let label_ext = DebugUtilsLabelEXT::default()
                 .label_name(&label_cstr)
-                .build();
+                ;
             utils.cmd_begin_debug_utils_label(self.cmd_buf, &label_ext);
         }
     }
@@ -1221,30 +1221,30 @@ impl crate::backend::DescriptorSetBuilder<VkDevice> for DescriptorSetBuilder {
         let mut descriptor_pool_sizes = Vec::new();
         if !self.buffers.is_empty() {
             descriptor_pool_sizes.push(
-                vk::DescriptorPoolSize::builder()
+                vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::STORAGE_BUFFER)
                     .descriptor_count(self.buffers.len() as u32)
-                    .build(),
+                    ,
             );
         }
         if !self.images.is_empty() {
             descriptor_pool_sizes.push(
-                vk::DescriptorPoolSize::builder()
+                vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::STORAGE_IMAGE)
                     .descriptor_count(self.images.len() as u32)
-                    .build(),
+                    ,
             );
         }
         if !self.textures.is_empty() {
             descriptor_pool_sizes.push(
-                vk::DescriptorPoolSize::builder()
+                vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::STORAGE_IMAGE)
                     .descriptor_count(self.textures.len() as u32)
-                    .build(),
+                    ,
             );
         }
         let descriptor_pool = device.create_descriptor_pool(
-            &vk::DescriptorPoolCreateInfo::builder()
+            &vk::DescriptorPoolCreateInfo::default()
                 .pool_sizes(&descriptor_pool_sizes)
                 .max_sets(1),
             None,
@@ -1253,7 +1253,7 @@ impl crate::backend::DescriptorSetBuilder<VkDevice> for DescriptorSetBuilder {
 
         let descriptor_sets = device
             .allocate_descriptor_sets(
-                &vk::DescriptorSetAllocateInfo::builder()
+                &vk::DescriptorSetAllocateInfo::default()
                     .descriptor_pool(descriptor_pool)
                     .set_layouts(&descriptor_set_layouts),
             )
@@ -1262,16 +1262,16 @@ impl crate::backend::DescriptorSetBuilder<VkDevice> for DescriptorSetBuilder {
         // Maybe one call to update_descriptor_sets with an array of descriptor_writes?
         for buf in &self.buffers {
             device.update_descriptor_sets(
-                &[vk::WriteDescriptorSet::builder()
+                &[vk::WriteDescriptorSet::default()
                     .dst_set(descriptor_sets[0])
                     .dst_binding(binding)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .buffer_info(&[vk::DescriptorBufferInfo::builder()
+                    .buffer_info(&[vk::DescriptorBufferInfo::default()
                         .buffer(*buf)
                         .offset(0)
                         .range(vk::WHOLE_SIZE)
-                        .build()])
-                    .build()],
+                        ])
+                    ],
                 &[],
             );
             binding += 1;
@@ -1279,32 +1279,32 @@ impl crate::backend::DescriptorSetBuilder<VkDevice> for DescriptorSetBuilder {
         // maybe chain images and textures together; they're basically identical now
         for image in &self.images {
             device.update_descriptor_sets(
-                &[vk::WriteDescriptorSet::builder()
+                &[vk::WriteDescriptorSet::default()
                     .dst_set(descriptor_sets[0])
                     .dst_binding(binding)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                    .image_info(&[vk::DescriptorImageInfo::builder()
+                    .image_info(&[vk::DescriptorImageInfo::default()
                         .sampler(vk::Sampler::null())
                         .image_view(*image)
                         .image_layout(vk::ImageLayout::GENERAL)
-                        .build()])
-                    .build()],
+                        ])
+                    ],
                 &[],
             );
             binding += 1;
         }
         for image in &self.textures {
             device.update_descriptor_sets(
-                &[vk::WriteDescriptorSet::builder()
+                &[vk::WriteDescriptorSet::default()
                     .dst_set(descriptor_sets[0])
                     .dst_binding(binding)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                    .image_info(&[vk::DescriptorImageInfo::builder()
+                    .image_info(&[vk::DescriptorImageInfo::default()
                         .sampler(vk::Sampler::null())
                         .image_view(*image)
                         .image_layout(vk::ImageLayout::GENERAL)
-                        .build()])
-                    .build()],
+                        ])
+                    ],
                 &[],
             );
             binding += 1;
@@ -1354,11 +1354,11 @@ impl VkSwapchain {
             .collect::<SmallVec<[_; 4]>>();
         Ok(self.swapchain_fn.queue_present(
             self.present_queue,
-            &vk::PresentInfoKHR::builder()
+            &vk::PresentInfoKHR::default()
                 .swapchains(&[self.swapchain])
                 .image_indices(&[image_idx as u32])
                 .wait_semaphores(&semaphores)
-                .build(),
+                ,
         )?)
     }
 }

@@ -171,7 +171,7 @@ impl<'a> GlyphProvider<'a> {
                         );
                     }
                 }
-                Command::Fill(brush, brush_xform) => {
+                Command::Fill(_brush, _brush_xform) => {
                     // TODO: this needs to compute a bounding box for
                     // the parent clips
                 }

@@ -104,7 +104,7 @@ impl<'a> Builder<'a> {
     /// Fills a shape using the specified style and brush.
     pub fn fill<'s, E>(
         &mut self,
-        style: Fill,
+        _style: Fill,
         brush: &Brush,
         brush_transform: Option<Affine>,
         elements: E,

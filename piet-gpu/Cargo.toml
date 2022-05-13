@@ -5,20 +5,33 @@ authors = ["Raph Levien <raph.levien@gmail.com>"]
 description = "A compute-centric GPU 2D renderer."
 readme = "README.md"
 license = "MIT/Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "cli"
 path = "bin/cli.rs"
+required-features = ["clap","roxmltree","png"]
+
+[[bin]]
+name = "wayland"
+path = "bin/wayland.rs"
+required-features = ["wayland-client", "wayland-protocols", "wayland-backend", "raw-window-handle"]
+
+[[bin]]
+name = "winit_simple"
+path = "bin/winit_simple.rs"
+required-features = ["winit"]
 
 [[bin]]
 name = "winit"
 path = "bin/winit.rs"
+required-features = ["winit","clap","roxmltree"]
 
 [[example]]
 name = "android"
 path = "bin/android.rs"
 crate-type = ["cdylib"]
+required-features = ["roxmltree"]
 
 [dependencies.piet-gpu-hal]
 path = "../piet-gpu-hal"
@@ -28,19 +41,24 @@ path = "../piet-gpu-types"
 
 [dependencies]
 piet = "0.2.0"
-png = "0.16.2"
-rand = "0.7.3"
-roxmltree = "0.13"
-winit = "0.26.1"
-clap = "2.33"
-swash = "0.1.4"
+cfg-if = "*"
+png = { version = "0.16.2", optional = true }
+rand = { version = "0.7.3", optional = true }
+roxmltree = { version = "0.13", optional = true }
+winit = { version = "0.26.1", optional = true }
+clap = { version = "2.33", optional = true }
+swash = { version = "0.1.4", optional = true }
 bytemuck = { version = "1.7.2", features = ["derive"] }
+wayland-client= { version = "0.30.0-alpha", optional = true }
+wayland-protocols= { version = "0.30.0-alpha", features=['client'], optional = true }
+wayland-backend= { version = "0.1.0-alpha", features=['client_system'], optional = true }
+raw-window-handle = { version = '0.4', optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 ndk = "0.3"
 ndk-sys = "0.2.0"
 ndk-glue = "0.3"
-raw-window-handle = "0.3"
+raw-window-handle = "0.4"
 
 [package.metadata.android.application]
 debuggable = true
